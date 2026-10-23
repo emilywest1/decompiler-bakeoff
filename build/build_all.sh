@@ -42,35 +42,36 @@ fetch() {
 
 
 
+# Single-file projects are compiled directly so they get exactly $CFLAGS
+# (their own Makefiles would use -Os / extra flags).
+build_linenoise() { gcc $CFLAGS -o linenoise-example linenoise.c example.c && cp linenoise-example "$1"; }
+
+build_inih()   { gcc $CFLAGS -o ini_dump ini.c examples/ini_dump.c && cp ini_dump "$1"; }
+
+build_tree()   { make -j"$JOBS" tree && cp tree "$1"; }    # Makefile uses CFLAGS from the environment
+
 build_zlib()   { ./configure --static && make -j"$JOBS" minigzip && cp minigzip "$1"; }
 
-build_curl() {
+build_cjson()  { gcc $CFLAGS -o cJSON_test cJSON.c test.c -lm && cp cJSON_test "$1"; }
+
+# DISPATCH=0: one generic code path instead of separate AVX2/AVX-512 copies.
+build_xxhash() { make -j"$JOBS" xxhsum DISPATCH=0 && cp xxhsum "$1"; }
+
+build_md4c() {
+    cmake -S . -B b -DCMAKE_BUILD_TYPE=None -DCMAKE_C_FLAGS="$CFLAGS" -DBUILD_SHARED_LIBS=OFF \
+    && cmake --build b -j"$JOBS" --target md2html && cp b/md2html/md2html "$1"
+}
+
+build_libdeflate() {
     cmake -S . -B b -DCMAKE_BUILD_TYPE=None -DCMAKE_C_FLAGS="$CFLAGS" \
-        -DBUILD_SHARED_LIBS=OFF -DBUILD_STATIC_LIBS=ON -DBUILD_CURL_EXE=ON \
-        -DBUILD_TESTING=OFF -DBUILD_LIBCURL_DOCS=OFF -DBUILD_MISC_DOCS=OFF -DENABLE_CURL_MANUAL=OFF \
-        -DCURL_USE_OPENSSL=ON -DCURL_ZLIB=ON -DCURL_BROTLI=OFF -DCURL_ZSTD=OFF \
-        -DUSE_NGHTTP2=OFF -DUSE_LIBIDN2=OFF -DCURL_USE_LIBPSL=OFF -DCURL_USE_LIBSSH2=OFF \
-        -DCURL_DISABLE_LDAP=ON -DUSE_LIBRTMP=OFF \
-    && cmake --build b -j"$JOBS" --target curl && cp b/src/curl "$1"
+        -DLIBDEFLATE_BUILD_SHARED_LIB=OFF -DLIBDEFLATE_USE_SHARED_LIB=OFF \
+    && cmake --build b -j"$JOBS" --target libdeflate-gzip && cp b/programs/libdeflate-gzip "$1"
 }
 
-build_john() {
-    cd src && ./configure --disable-native-tests --disable-openmp --disable-opencl \
-    && make -sj"$JOBS" && cp ../run/john "$1"
-}
-
-build_redis()  { make -j"$JOBS" MALLOC=libc BUILD_TLS=no OPTIMIZATION=-O2 CFLAGS="-g" redis-server && cp src/redis-server "$1"; }
-build_valkey() { make -j"$JOBS" MALLOC=libc BUILD_TLS=no OPTIMIZATION=-O2 CFLAGS="-g" valkey-server && cp src/valkey-server "$1"; }
-
-build_chocolate-doom() { autoreconf -fi && ./configure && make -j"$JOBS" && cp src/chocolate-doom "$1"; }
-
-build_sqlite() { ./configure --disable-tcl && make -j"$JOBS" sqlite3 && cp sqlite3 "$1"; }
+# lz4's Makefile prepends -O3; our -O2 comes later on the command line and wins.
+build_lz4()    { make -j"$JOBS" -C programs lz4 && cp programs/lz4 "$1"; }
 
 build_lua()    { make -j"$JOBS" CC=gcc CFLAGS="-Wall -O2 -g -DLUA_USE_LINUX -DLUA_COMPAT_5_3" MYLIBS="" && cp lua "$1"; }
-
-build_openssh() { autoreconf -fi && ./configure --without-zlib-version-check && make -j"$JOBS" ssh && cp ssh "$1"; }
-
-build_nginx()  { auto/configure --with-cc-opt="$CFLAGS" && make -j"$JOBS" && cp objs/nginx "$1"; }
 
 STATUS=$OUT/build_status.csv
 [ -f "$STATUS" ] || echo "name,commit,status,binary_sha256,stripped_sha256,size_bytes" > "$STATUS"

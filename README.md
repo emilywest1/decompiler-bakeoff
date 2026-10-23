@@ -20,7 +20,7 @@ docker run --rm -v "$PWD/out:/bakeoff/out" -v "$PWD/results:/bakeoff/results" ba
 The output for each pair of compilers and programs is stored in `results/results.csv`  and
 `results/disagreements.csv`.
 
-To run a specific pair, use `docker run ... bakeoff ./run_all.sh zlib lua`.
+To run only some programs, use `docker run ... bakeoff ./run_all.sh zlib lua`.
 
 ## Packages
 
@@ -37,19 +37,24 @@ To run a specific pair, use `docker run ... bakeoff ./run_all.sh zlib lua`.
 
 See `programs.csv`
 
-| Program | Ref | Commit | Binary analysed |
-|---|---|---|---|
-| zlib | v1.3.2 | da607da7 | minigzip (static libz) |
-| curl | curl-8_23_0 | 3163ec06 | curl (static libcurl) |
-| John the Ripper | bleeding-jumbo | 5184bc0b | john |
-| redis | 8.10.1 | 3399357e | redis-server |
-| Chocolate Doom | master | 895f581c | chocolate-doom |
-| SQLite | master | 7936c510 | sqlite3 |
-| Valkey | unstable | 6ae7eb48 | valkey-server |
-| Lua | master | 7579fc9d | lua |
-| OpenSSH portable | V_10_6_P1 | a8c72b84 | ssh |
-| nginx | master | f9c4264b | nginx |
+| Program | Ref | Commit | Binary analysed | What it is |
+|---|---|---|---|---|
+| linenoise | master | a473823d | linenoise-example | line-editing library (used by redis, MongoDB) |
+| inih | r62 | 26254ee9 | ini_dump | INI file parser |
+| tree | 2.3.2 | 1a41b51b | tree | Unix `tree` command |
+| zlib | v1.3.2 | da607da7 | minigzip (static libz) | compression |
+| cJSON | v1.7.19 | c859b25d | cJSON_test | JSON parser |
+| xxHash | v0.8.4 | c87183a7 | xxhsum | non-cryptographic hashing |
+| md4c | v0.6.0 | 7fc1815a | md2html | Markdown parser (used by Qt) |
+| libdeflate | v1.26 | 92e6a0db | libdeflate-gzip | fast gzip/deflate |
+| lz4 | v1.10.0 | ebb370ca | lz4 | compression (Linux kernel, ZFS) |
+| Lua | master | 7579fc9d | lua | scripting language interpreter |
 
+The D1 plan also included curl, John the Ripper, redis, Chocolate Doom, SQLite, Valkey,
+OpenSSH and nginx. We replaced them with smaller programs because full decompilation of
+those binaries took several hours per tool (redis, valkey and john each have about 7,000
+functions). The replacements keep a mix of program types and a range of sizes, from tiny
+(inih, linenoise) to small (lz4, Lua).
 
 ## Decompilers
 

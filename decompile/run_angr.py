@@ -61,13 +61,13 @@ def main():
     for name in sys.argv[1:] or programs:
         binary = os.path.join(OUT, "bin", f"{name}.stripped")
         if not os.path.isfile(binary):
-            print(f"[angr] {name}: no binary, skipping")
+            print(f"[angr] {name}: no binary, skipping", flush=True)
             continue
-        print(f"[angr] {name}")
+        print(f"[angr] {name}", flush=True)
         try:
             decompile(binary, os.path.join(DEST, f"{name}.csv"), os.path.join(DEST, f"{name}.c"))
         except Exception as e:
-            print(f"[angr] {name} FAILED: {e!r}")
+            print(f"[angr] {name} FAILED: {e!r}", flush=True)
 
 
 if __name__ == "__main__":

@@ -20,13 +20,10 @@ ENV DEBIAN_FRONTEND=noninteractive \
 RUN apt-get update -qq && apt-get install -y -qq --no-install-recommends ca-certificates \
  && apt-get update -qq --snapshot ${UBUNTU_SNAPSHOT} \
  && apt-get install -y -qq --no-install-recommends --snapshot ${UBUNTU_SNAPSHOT} \
-      gcc-13 g++-13 make cmake autoconf automake libtool pkg-config \
+      gcc-13 g++-13 make cmake \
       git curl unzip xz-utils file binutils \
       python3 python3-venv \
       openjdk-21-jdk-headless \
-      zlib1g-dev libpcre2-dev libssl-dev \
-      libsdl2-dev libsdl2-mixer-dev libsdl2-net-dev \
-      tcl \
  && update-alternatives --install /usr/bin/gcc gcc /usr/bin/gcc-13 100 \
  && update-alternatives --install /usr/bin/cc  cc  /usr/bin/gcc-13 100 \
  && update-alternatives --install /usr/bin/g++ g++ /usr/bin/g++-13 100 \
