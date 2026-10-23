@@ -31,6 +31,7 @@ To run a specific pair, use `docker run ... bakeoff ./run_all.sh zlib lua`.
 - angr 10.0.5
 - RetDec v5.0
 - pyelftools 0.32
+- libsdl2-mixer-dev
 
 ## Programs
 
