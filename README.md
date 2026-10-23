@@ -1,1 +1,121 @@
 # decompiler-bakeoff
+
+CPT_S 428, Track C: Decompiler Bake-Off.
+Team: Shane Ganz, Josiah Norton, Nathan Teh, Emily West.
+
+We compile 10 open-source C programs with **gcc 13.3.0 at `-O2 -g`**, strip them, run
+three decompilers on the stripped binaries, and score each decompiler against ground
+truth taken from the unstripped build of the same pinned source.
+
+## Run it
+
+```bash
+git clone <REPO_URL> decompiler-bakeoff
+cd decompiler-bakeoff
+docker build -t bakeoff .
+mkdir -p out results
+docker run --rm -v "$PWD/out:/bakeoff/out" -v "$PWD/results:/bakeoff/results" bakeoff
+```
+
+The output for each pair of compilers and programs is `results/results.csv`  and
+`results/disagreements.csv`.
+
+To run a specific pair, use `docker run ... bakeoff ./run_all.sh zlib lua`.
+
+## Pinned packages
+
+- Ubuntu 24.04 (pinned by image digest)
+- gcc 13.3.0
+- OpenJDK 21
+- Ghidra 12.1.3
+- angr 10.0.5
+- RetDec v5.0
+- pyelftools 0.32
+
+## Programs
+
+See `programs.csv`. The ref column is informational. Builds always use the commit SHA.
+
+| Program | Ref | Commit | Binary analysed |
+|---|---|---|---|
+| zlib | v1.3.2 | da607da7 | minigzip (static libz) |
+| curl | curl-8_23_0 | 3163ec06 | curl (static libcurl) |
+| John the Ripper | bleeding-jumbo | 5184bc0b | john |
+| redis | 8.10.1 | 3399357e | redis-server |
+| Chocolate Doom | master | 895f581c | chocolate-doom |
+| SQLite | master | 7936c510 | sqlite3 |
+| Valkey | unstable | 6ae7eb48 | valkey-server |
+| Lua | master | 7579fc9d | lua |
+| OpenSSH portable | V_10_6_P1 | a8c72b84 | ssh |
+| nginx | master | f9c4264b | nginx |
+
+Our D1 plan listed John the Ripper "7.0.1", but that version does not exist upstream.
+The latest tag is 1.9.0-Jumbo-1 from 2019. We pinned the current bleeding-jumbo commit instead.
+D1 also left curl and OpenSSH unpinned. They are now pinned to the release tags shown above.
+
+## Layout
+
+```
+Dockerfile               pinned environment (gcc 13.3.0, Ghidra 12.1.3, RetDec v5.0, JDK 21, Python)
+run_all.sh               build -> Ghidra -> angr -> RetDec -> score
+programs.csv             name, repo, commit, binary
+build/build_all.sh       clone at commit, compile -O2 -g, strip, record SHA-256
+decompile/run_ghidra.sh  Ghidra analyzeHeadless + ghidra_scripts/ExportDecomp.java
+decompile/run_angr.py    angr Decompiler analysis, one function at a time
+decompile/run_retdec.sh  retdec-decompiler on the whole binary + retdec_export.py
+measure/score.py         ground truth from DWARF, writes results/*.csv
+```
+
+## Decompilers
+
+| Tool | How it runs | Notes |
+|---|---|---|
+| Ghidra 12.1.3 | `analyzeHeadless` + `ExportDecomp.java` | per-function timeout `DECOMP_TIMEOUT` (default 60 s) |
+| angr 10.0.5 | Python API (`CFGFast` + `Decompiler`) | per-function timeout `DECOMP_TIMEOUT`; slowest of the three on large binaries |
+| RetDec v5.0 | `retdec-decompiler` CLI, whole binary at once | whole-binary timeout `RETDEC_TIMEOUT` (default 7200 s); unmaintained since 2022 |
+
+Our D1 plan listed IDA Free 9.1 and Binary Ninja 6.0. We replaced them because neither
+can run from a script with the licenses we have. IDA Free has no headless mode, since idalib is
+Pro-only, and Binary Ninja's headless API needs a Commercial license. That means the
+grader could not re-run them. angr and RetDec are free, run inside Docker, and each
+has its own decompiler engine. We avoided r2ghidra/rz-ghidra because they reuse
+Ghidra's engine.
+
+All three tools write the same per-function format to `out/decomp/<tool>/<program>.csv`:
+`entry_offset,name,param_count,decompiled_ok,c_lines`. `entry_offset` is relative to the image
+base, so the tools' different load addresses do not matter. If a tool fails on a whole
+program, its row shows `status=tool_failed` with zeros, so the harness still produces all 30 rows.
+
+## Metric
+
+**Ground truth.** A ground-truth function is a `.text` function symbol in the
+unstripped binary that has a DWARF `DW_TAG_subprogram` at the same address. That means
+it was compiled from the program's own source. GCC clones (`.isra`, `.constprop`,
+`.cold`) are excluded. Its true arity is the number of DWARF formal parameters.
+Variadic functions are excluded from arity scoring.
+
+`results/results.csv` has one row per (program, tool):
+
+| column | meaning |
+|---|---|
+| `gt_functions` | ground-truth functions |
+| `found` | GT functions whose entry the tool also identified as a function |
+| `decompiled` | of those, decompiled without error/timeout |
+| `recall` | `found / gt_functions` |
+| `arity_accuracy` | decompiled functions whose recovered parameter count equals the source's |
+| `status` | `ok`, `tool_failed` (decompiler produced no output) or `no_binary` (build failed) |
+
+**Hits (D1 rule).** A hit is a function that two decompilers both decompiled but whose
+recovered signatures disagree. `results/disagreements.csv` counts hits per (program, tool
+pair) and uses the source ground truth to say which tool was right. This connects the
+D1 "hit" definition to the source-code ground truth.
+
+## Regenerating checksums.txt
+
+After a reference build, run the following and commit the file:
+
+```bash
+(cd out/bin && sha256sum *.stripped) > checksums.txt
+```
+
+`build_all.sh` compares every later build against it and warns on any mismatch.
