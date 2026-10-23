@@ -14,13 +14,21 @@ WORK=${WORK:-$ROOT/work}
 JOBS=${JOBS:-$(nproc)}
 mkdir -p "$OUT/bin" "$OUT/logs" "$WORK"
 
-# One set of flags for every program, so optimisation level is not a variable.
+# Refuse to build outside the pinned environment (scope stated in D1)
+if [ "$(gcc -dumpfullversion 2>/dev/null)" != "13.3.0" ]; then
+    echo "[build] ERROR: gcc $(gcc -dumpfullversion 2>/dev/null) found, gcc 13.3.0 required." >&2
+    echo "[build] Run the harness inside the Docker image (see README)." >&2
+    exit 1
+fi
+
+# Programs compiled with the same compiler and optimizations
 export CC=gcc CXX=g++
 export CFLAGS="-O2 -g"
 export CXXFLAGS="-O2 -g"
 export LDFLAGS=""
 
-fetch() {  # fetch <name> <repo> <commit>
+# Pull program repository version & commit
+fetch() {
     local dir=$WORK/$1
     if [ -d "$dir/.git" ] && [ "$(git -C "$dir" rev-parse HEAD)" = "$3" ]; then
         git -C "$dir" clean -fdxq && git -C "$dir" checkout -q -- .
@@ -31,6 +39,8 @@ fetch() {  # fetch <name> <repo> <commit>
     git -C "$dir" fetch -q --depth 1 "$2" "$3"
     git -C "$dir" checkout -q FETCH_HEAD
 }
+
+
 
 build_zlib()   { ./configure --static && make -j"$JOBS" minigzip && cp minigzip "$1"; }
 

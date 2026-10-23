@@ -1,5 +1,4 @@
-# Pinned environment for the Track C decompiler bake-off.
-# Everything that affects the binaries or the decompiler output is pinned:
+# Pinned:
 #   - base image by digest (Ubuntu 24.04 "noble")
 #   - apt packages via a dated Ubuntu snapshot (gcc-13 = 13.3.0)
 #   - Ghidra 12.1.3 and RetDec v5.0 by release URL + SHA-256

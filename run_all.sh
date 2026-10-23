@@ -3,6 +3,7 @@
 #   1. build all programs at their pinned commits
 #   2. run Ghidra, angr and RetDec on every stripped binary
 #   3. score every (program, decompiler) pair -> results/results.csv
+export DECOMP_TIMEOUT=${DECOMP_TIMEOUT:-10}
 set -euo pipefail
 cd "$(dirname "$0")"
 
