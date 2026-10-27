@@ -10,14 +10,14 @@ truth of the unstripped build of the same pinned source.
 ## Run it
 
 ```bash
-git clone <REPO_URL> decompiler-bakeoff
+git clone https://github.com/emilywest1/decompiler-bakeoff
 cd decompiler-bakeoff
 docker build -t bakeoff .
 mkdir -p out results
 docker run --rm -v "$PWD/out:/bakeoff/out" -v "$PWD/results:/bakeoff/results" bakeoff
 ```
 
-The output for each pair of compilers and programs is stored in `results/results.csv`  and
+The output for each pair of de-compilers and programs is stored in `results/results.csv`  and
 `results/disagreements.csv`.
 
 To run only some programs, use `docker run ... bakeoff ./run_all.sh zlib lua`.
