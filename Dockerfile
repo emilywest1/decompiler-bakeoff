@@ -18,8 +18,9 @@ ENV DEBIAN_FRONTEND=noninteractive \
 
 # ca-certificates first so the snapshot mirror (HTTPS) can be used for everything else.
 RUN apt-get update -qq && apt-get install -y -qq --no-install-recommends ca-certificates \
- && apt-get update -qq --snapshot ${UBUNTU_SNAPSHOT} \
- && apt-get install -y -qq --no-install-recommends --snapshot ${UBUNTU_SNAPSHOT} \
+ && if apt-get update -qq --error-on=any --snapshot ${UBUNTU_SNAPSHOT}; then SNAP="--snapshot ${UBUNTU_SNAPSHOT}"; \
+    else echo "snapshot.ubuntu.com unavailable, using the regular Ubuntu archive"; apt-get update -qq; SNAP=""; fi \
+ && apt-get install -y -qq --no-install-recommends $SNAP \
       gcc-13 g++-13 make cmake \
       git curl unzip xz-utils file binutils \
       python3 python3-venv \
