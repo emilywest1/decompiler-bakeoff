@@ -1,5 +1,4 @@
 #!/usr/bin/env bash
-# The one command the grader runs (inside the Docker image):
 #   1. build all programs at their pinned commits
 #   2. run Ghidra, angr and RetDec on every stripped binary
 #   3. score every (program, decompiler) pair -> results/results.csv
