@@ -1,17 +1,25 @@
 #!/usr/bin/env bash
 # Clone every program in programs.csv at its pinned commit and compile it with
-# gcc 13.3.0, -O2 -g. For each program this produces:
-#   $OUT/bin/<name>           unstripped binary (ground truth: symbols + DWARF)
-#   $OUT/bin/<name>.stripped  stripped copy (what the decompilers are given)
-# and appends a row to $OUT/build_status.csv.
+# gcc 13.3.0 at each optimisation level in $OPT_LEVELS (default: O0 O2 Os), always
+# with -g. For each program and level <opt> this produces:
+#   $OUT/bin/<name>-<opt>           unstripped binary (ground truth: symbols + DWARF)
+#   $OUT/bin/<name>-<opt>.stripped  stripped copy (what the decompilers are given)
+# and a row in $OUT/build_status.csv.
+#
+# -g does not change the generated code, so the stripped copy is exactly what a
+# release build at that level would be. After each build the DWARF producer strings
+# are checked to confirm every compilation unit really used the requested -O level
+# (a project's own Makefile could otherwise silently override it).
 #
 # Usage: build/build_all.sh [program ...]     (default: all programs)
+#        OPT_LEVELS="O0" build/build_all.sh lua
 set -uo pipefail
 
 ROOT=$(cd "$(dirname "$0")/.." && pwd)
 OUT=${OUT:-$ROOT/out}
 WORK=${WORK:-$ROOT/work}
 JOBS=${JOBS:-$(nproc)}
+read -r -a OPTS <<< "${OPT_LEVELS:-O0 O2 Os}"
 mkdir -p "$OUT/bin" "$OUT/logs" "$WORK"
 
 # Refuse to build outside the pinned environment (scope stated in D1)
@@ -21,13 +29,11 @@ if [ "$(gcc -dumpfullversion 2>/dev/null)" != "13.3.0" ]; then
     exit 1
 fi
 
-# Programs compiled with the same compiler and optimizations
 export CC=gcc CXX=g++
-export CFLAGS="-O2 -g"
-export CXXFLAGS="-O2 -g"
 export LDFLAGS=""
 
-# Pull program repository version & commit
+# Pull program repository version & commit (a reused checkout is reset to pristine,
+# so every optimisation level starts from a clean tree).
 fetch() {
     local dir=$WORK/$1
     if [ -d "$dir/.git" ] && [ "$(git -C "$dir" rev-parse HEAD)" = "$3" ]; then
@@ -40,15 +46,19 @@ fetch() {
     git -C "$dir" checkout -q FETCH_HEAD
 }
 
-
-
-# Single-file projects are compiled directly so they get exactly $CFLAGS
-# (their own Makefiles would use -Os / extra flags).
+# Each build_<name> runs inside the checkout with CFLAGS="-<opt> -g" exported and
+# copies the finished binary to $1. How each project is made to honour CFLAGS:
+#   linenoise, inih, cjson  compiled directly with $CFLAGS (their Makefiles use their own flags)
+#   tree, xxhash            Makefile uses CFLAGS ?= ..., so the environment value wins
+#   zlib                    ./configure only defaults to -O3 when CFLAGS is unset
+#   md4c, libdeflate        CMAKE_BUILD_TYPE=None, so no Release -O2 is appended
+#   lz4                     Makefile prepends -O3; our level comes later and gcc uses the last -O
+#   lua                     makefile hard-codes -O2, so CFLAGS is overridden on the command line
 build_linenoise() { gcc $CFLAGS -o linenoise-example linenoise.c example.c && cp linenoise-example "$1"; }
 
 build_inih()   { gcc $CFLAGS -o ini_dump ini.c examples/ini_dump.c && cp ini_dump "$1"; }
 
-build_tree()   { make -j"$JOBS" tree && cp tree "$1"; }    # Makefile uses CFLAGS from the environment
+build_tree()   { make -j"$JOBS" tree && cp tree "$1"; }
 
 build_zlib()   { ./configure --static && make -j"$JOBS" minigzip && cp minigzip "$1"; }
 
@@ -68,31 +78,50 @@ build_libdeflate() {
     && cmake --build b -j"$JOBS" --target libdeflate-gzip && cp b/programs/libdeflate-gzip "$1"
 }
 
-# lz4's Makefile prepends -O3; our -O2 comes later on the command line and wins.
 build_lz4()    { make -j"$JOBS" -C programs lz4 && cp programs/lz4 "$1"; }
 
-build_lua()    { make -j"$JOBS" CC=gcc CFLAGS="-Wall -O2 -g -DLUA_USE_LINUX -DLUA_COMPAT_5_3" MYLIBS="" && cp lua "$1"; }
+build_lua()    { make -j"$JOBS" CC=gcc CFLAGS="-Wall $CFLAGS -DLUA_USE_LINUX -DLUA_COMPAT_5_3" MYLIBS="" && cp lua "$1"; }
+
+# Print "ok" if every C compilation unit's last -O flag is -$2, otherwise the
+# offending flags. gcc records its command-line switches in DW_AT_producer.
+check_opt() {
+    local seen
+    seen=$(readelf --debug-dump=info "$1" 2>/dev/null | grep 'DW_AT_producer' | grep 'GNU C' \
+           | while read -r line; do
+                 tr ' ' '\n' <<< "$line" | grep -E '^-O[0-9sgz]?$' | tail -n 1
+             done | sort -u | tr '\n' ' ')
+    seen=${seen% }
+    if [ "$seen" = "-$2" ]; then echo ok; else echo "mismatch(${seen:-none})"; fi
+}
 
 STATUS=$OUT/build_status.csv
-[ -f "$STATUS" ] || echo "name,commit,status,binary_sha256,stripped_sha256,size_bytes" > "$STATUS"
+HEADER="name,opt_level,commit,status,opt_check,binary_sha256,stripped_sha256,size_bytes"
+# Start a new status file if it is missing or has the old (pre-opt-level) header.
+[ -f "$STATUS" ] && [ "$(head -n 1 "$STATUS")" = "$HEADER" ] || echo "$HEADER" > "$STATUS"
 
 want=("$@")
 tail -n +2 "$ROOT/programs.csv" | while IFS=, read -r name repo commit ref binary; do
     if [ ${#want[@]} -gt 0 ] && [[ ! " ${want[*]} " =~ " $name " ]]; then continue; fi
-    log=$OUT/logs/build_$name.log
-    echo "[build] $name @ ${commit:0:12} (log: ${log#$ROOT/})"
-    sed -i "/^$name,/d" "$STATUS"
-    if fetch "$name" "$repo" "$commit" >"$log" 2>&1 \
-       && (cd "$WORK/$name" && "build_$name" "$OUT/bin/$name") >>"$log" 2>&1; then
-        strip --strip-all -o "$OUT/bin/$name.stripped" "$OUT/bin/$name"
-        sha=$(sha256sum "$OUT/bin/$name" | cut -d' ' -f1)
-        ssha=$(sha256sum "$OUT/bin/$name.stripped" | cut -d' ' -f1)
-        echo "$name,$commit,ok,$sha,$ssha,$(stat -c%s "$OUT/bin/$name.stripped")" >> "$STATUS"
-        echo "        ok"
-    else
-        echo "$name,$commit,FAILED,,," >> "$STATUS"
-        echo "        FAILED -- last lines of $log:"; tail -n 15 "$log" | sed 's/^/        | /'
-    fi
+    for opt in "${OPTS[@]}"; do
+        export CFLAGS="-$opt -g" CXXFLAGS="-$opt -g"
+        out=$OUT/bin/$name-$opt
+        log=$OUT/logs/build_$name-$opt.log
+        echo "[build] $name -$opt @ ${commit:0:12} (log: ${log#$ROOT/})"
+        sed -i "/^$name,$opt,/d" "$STATUS"
+        if fetch "$name" "$repo" "$commit" >"$log" 2>&1 \
+           && (cd "$WORK/$name" && "build_$name" "$out") >>"$log" 2>&1; then
+            strip --strip-all -o "$out.stripped" "$out"
+            chk=$(check_opt "$out" "$opt")
+            sha=$(sha256sum "$out" | cut -d' ' -f1)
+            ssha=$(sha256sum "$out.stripped" | cut -d' ' -f1)
+            echo "$name,$opt,$commit,ok,$chk,$sha,$ssha,$(stat -c%s "$out.stripped")" >> "$STATUS"
+            if [ "$chk" = ok ]; then echo "        ok"
+            else echo "        ok, but WARNING: optimisation flags $chk, expected -$opt"; fi
+        else
+            echo "$name,$opt,$commit,FAILED,,,," >> "$STATUS"
+            echo "        FAILED -- last lines of $log:"; tail -n 15 "$log" | sed 's/^/        | /'
+        fi
+    done
 done
 
 # Compare against the reference checksums committed in the repo (informational:
