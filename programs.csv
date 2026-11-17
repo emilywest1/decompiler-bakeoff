@@ -7,5 +7,5 @@ cjson,https://github.com/DaveGamble/cJSON,c859b25da02955fef659d658b8f324b5cde87b
 xxhash,https://github.com/Cyan4973/xxHash,c87183a77d67f7d37e3d2d1b7eaac5e7c695e4f0,v0.8.4,xxhsum
 md4c,https://github.com/mity/md4c,7fc1815a5eeba2af7d6120a76202bf59f3b6e6e4,v0.6.0,md2html
 libdeflate,https://github.com/ebiggers/libdeflate,92e6a0db9fa848d742f9eb286c92afc60f2c3dda,v1.26,libdeflate-gzip
-lz4,https://github.com/lz4/lz4,ebb370ca83af193212df4dcbadcc5d87bc0de2f0,v1.10.0,lz4
-lua,https://github.com/lua/lua,7579fc9d7ed90240487251dfb69168f8e64e9294,master,lua
+picocom,https://github.com/npat-efault/picocom,90385aabe2b51f39fa130627d46b377569f82d4a,3.1,picocom
+darkhttpd,https://github.com/emikulic/darkhttpd,3075d35e1d2deb65ed8b079137c4ae1213de4b48,v1.17,darkhttpd

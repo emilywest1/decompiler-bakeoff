@@ -161,7 +161,7 @@ def main():
                 s[k] = sum(r[k] for r in rs)
             # Blank (not 0.0) when nothing was built at this level, so it can't be misread.
             s["accuracy"] = ratio(s["hits"], gt_total) if rs else ""
-            # Unweighted mean over programs, so lua (712 functions) does not dominate.
+            # Unweighted mean over programs, so the largest program does not dominate.
             s["mean_program_accuracy"] = (round(sum(r["accuracy"] for r in rs) / len(rs), 4)
                                           if rs else "")
             summary.append(s)

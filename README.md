@@ -20,7 +20,7 @@ docker run --rm -v "$PWD/out:/bakeoff/out" -v "$PWD/results:/bakeoff/results" ba
 The output for each pair of de-compilers and programs is stored in `results/results.csv`  and
 `results/disagreements.csv`.
 
-To run only some programs, use `docker run ... bakeoff ./run_all.sh zlib lua`.
+To run only some programs, use `docker run ... bakeoff ./run_all.sh zlib darkhttpd`.
 
 ## Packages
 
@@ -47,14 +47,16 @@ See `programs.csv`
 | xxHash | v0.8.4 | c87183a7 | xxhsum | non-cryptographic hashing |
 | md4c | v0.6.0 | 7fc1815a | md2html | Markdown parser (used by Qt) |
 | libdeflate | v1.26 | 92e6a0db | libdeflate-gzip | fast gzip/deflate |
-| lz4 | v1.10.0 | ebb370ca | lz4 | compression (Linux kernel, ZFS) |
-| Lua | master | 7579fc9d | lua | scripting language interpreter |
+| picocom | 3.1 | 90385aab | picocom | serial-port terminal program |
+| darkhttpd | v1.17 | 3075d35e | darkhttpd | single-file static web server |
 
 The D1 plan also included curl, John the Ripper, redis, Chocolate Doom, SQLite, Valkey,
 OpenSSH and nginx. We replaced them with smaller programs because full decompilation of
 those binaries took several hours per tool (redis, valkey and john each have about 7,000
 functions). The replacements keep a mix of program types and a range of sizes, from tiny
-(inih, linenoise) to small (lz4, Lua).
+(inih, linenoise) to small (md4c, libdeflate). Lua and lz4 were later replaced by darkhttpd and
+picocom: in our batch harness angr recovered (void) signatures for nearly every function in them, and
+lz4 was also the third compression program in the set.
 
 ## Decompilers
 

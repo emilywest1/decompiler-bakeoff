@@ -12,7 +12,7 @@
 # (a project's own Makefile could otherwise silently override it).
 #
 # Usage: build/build_all.sh [program ...]     (default: all programs)
-#        OPT_LEVELS="O0" build/build_all.sh lua
+#        OPT_LEVELS="O0" build/build_all.sh darkhttpd
 set -uo pipefail
 
 ROOT=$(cd "$(dirname "$0")/.." && pwd)
@@ -48,12 +48,12 @@ fetch() {
 
 # Each build_<name> runs inside the checkout with CFLAGS="-<opt> -g" exported and
 # copies the finished binary to $1. How each project is made to honour CFLAGS:
-#   linenoise, inih, cjson  compiled directly with $CFLAGS (their Makefiles use their own flags)
+#   linenoise, inih, cjson, darkhttpd   compiled directly with $CFLAGS (their Makefiles use their own flags)
 #   tree, xxhash            Makefile uses CFLAGS ?= ..., so the environment value wins
 #   zlib                    ./configure only defaults to -O3 when CFLAGS is unset
 #   md4c, libdeflate        CMAKE_BUILD_TYPE=None, so no Release -O2 is appended
-#   lz4                     Makefile prepends -O3; our level comes later and gcc uses the last -O
-#   lua                     makefile hard-codes -O2, so CFLAGS is overridden on the command line
+#   picocom                 compiled directly with the defines from its Makefile, minus -DLINENOISE
+#                           (its bundled linenoise copy would duplicate the linenoise program)
 build_linenoise() { gcc $CFLAGS -o linenoise-example linenoise.c example.c && cp linenoise-example "$1"; }
 
 build_inih()   { gcc $CFLAGS -o ini_dump ini.c examples/ini_dump.c && cp ini_dump "$1"; }
@@ -78,9 +78,12 @@ build_libdeflate() {
     && cmake --build b -j"$JOBS" --target libdeflate-gzip && cp b/programs/libdeflate-gzip "$1"
 }
 
-build_lz4()    { make -j"$JOBS" -C programs lz4 && cp programs/lz4 "$1"; }
+build_picocom() {
+    gcc $CFLAGS -DVERSION_STR='"3.1"' -DTTY_Q_SZ=0 -DHIGH_BAUD -DUSE_FLOCK -o picocom \
+        picocom.c term.c fdio.c split.c termios2.c custbaud_bsd.c && cp picocom "$1"
+}
 
-build_lua()    { make -j"$JOBS" CC=gcc CFLAGS="-Wall $CFLAGS -DLUA_USE_LINUX -DLUA_COMPAT_5_3" MYLIBS="" && cp lua "$1"; }
+build_darkhttpd() { gcc $CFLAGS -o darkhttpd darkhttpd.c && cp darkhttpd "$1"; }
 
 # Print "ok" if every C compilation unit's last -O flag is -$2, otherwise the
 # offending flags. gcc records its command-line switches in DW_AT_producer.
